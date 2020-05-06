@@ -65,6 +65,49 @@ if test "$(docker images -q "${IMAGE_NAME}:latest")" = ""; then
 	             -t "${IMAGE_NAME}:latest" .
 fi
 
+MYSQL_ROOT_PASSWORD=
+MYSQL_DATABASE="$IMAGE_NAME"
+
+declare -r MARIADB_IMAGE_NAME='mariadb'
+if test "$(docker images -q "${MARIADB_IMAGE_NAME}:latest")" = ""; then
+	docker image pull "${MARIADB_IMAGE_NAME}:latest"
+fi
+
+declare -a -r MARIADB_DOCKER_ARGV=(
+	"docker"
+	"run"
+	"-d"
+	"--rm"
+	"-e"
+	"\"MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}\""
+	"-e"
+	"\"MYSQL_DATABASE=${MYSQL_DATABASE}\""
+	"-e"
+	"\"MYSQL_ALLOW_EMPTY_PASSWORD=yes\""
+	"\"${MARIADB_IMAGE_NAME}:latest\""
+	"--character-set-server=utf8mb4"
+	"--collation-server=utf8mb4_general_ci"
+)
+
+MARIADB_DOCKER_ID="$(eval "${MARIADB_DOCKER_ARGV[*]}")"
+MARIADB_DOCKER_IP_ADDR="$(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$MARIADB_DOCKER_ID")"
+
+# MariaDB server takes too long to start-up. Need to wait here before we can proceed.
+# See: https://hub.docker.com/_/mariadb:
+# If there is no database initialized when the container starts,
+# then a default database will be created.
+# While this is the expected behavior,
+# this means that it will not accept incoming connections until such initialization completes.
+# This may cause issues when using automation tools,
+# such as docker-compose, which start several containers simultaneously.
+printf 'Waiting for %s:3306 being available\n' "$MARIADB_DOCKER_IP_ADDR"
+while ! (read -N 1 -r -s < "/dev/tcp/${MARIADB_DOCKER_IP_ADDR}/3306") >/dev/null 2>&1; do
+	printf 'Waiting...\n'
+	sleep 1s
+done
+
+exit 0
+
 declare -a -r DOCKER_ARGV=(
 	"docker"
 	"run"
@@ -75,6 +118,7 @@ declare -a -r DOCKER_ARGV=(
 	"\"$HOST_NAME\""
 	"-w"
 	"\"$DOCKER_DOCROOT\""
+	"--rm"
 	"\"${IMAGE_NAME}:latest\""
 )
 
