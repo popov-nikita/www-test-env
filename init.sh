@@ -4,9 +4,17 @@ set -x
 set -u -e -o pipefail
 
 cd "$(dirname "$0")"
-HOST_DOCROOT="$(realpath 'docroot')"
 
 DOCKER_DOCROOT='/var/www/html'
+HOST_DOCROOT="$(mktemp --tmpdir=/tmp -d 'docroot.XXXXXXX')"
+chmod --silent 777 "$HOST_DOCROOT"
+printf 'Created temporary docroot in %s\n' "$HOST_DOCROOT"
+
+remove_temp_docroot() {
+	rm -r -f "$HOST_DOCROOT"
+}
+trap remove_temp_docroot EXIT
+
 IMAGE_NAME='www-test-env'
 HOST_NAME="${IMAGE_NAME}.local"
 MODSECURITY_TARGZ='modsecurity-2.9.3.tar.gz'
@@ -65,6 +73,8 @@ declare -a -r DOCKER_ARGV=(
 	"\"type=bind,src=${HOST_DOCROOT},dst=${DOCKER_DOCROOT},bind-nonrecursive=true\""
 	"-h"
 	"\"$HOST_NAME\""
+	"-w"
+	"\"$DOCKER_DOCROOT\""
 	"\"${IMAGE_NAME}:latest\""
 )
 
