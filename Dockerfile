@@ -59,6 +59,7 @@ RUN { \
         mods_avail_dir=/etc/apache2/mods-available; \
         test \( -d "$mods_avail_dir" \) -a \( -w "$mods_avail_dir" \); \
         echo "LoadModule security2_module $mod_sec_path" > ${mods_avail_dir}/mod_security2.load; \
+        a2enmod unique_id; \
         a2enmod mod_security2; \
     }
 
