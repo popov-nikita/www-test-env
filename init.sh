@@ -1,7 +1,15 @@
 #!/bin/bash
 
-set -x
+# Uncomment this to see debug output
+#set -x
 set -u -e -o pipefail
+
+declare -r NC_COMMAND=nc
+
+if ! type -t "$NC_COMMAND" >/dev/null 2>&1; then
+	printf 'Please, install %s for network operations\n' "$NC_COMMAND"
+	exit 1
+fi
 
 cd "$(dirname "$0")"
 
@@ -10,8 +18,14 @@ HOST_DOCROOT="$(mktemp --tmpdir=/tmp -d 'docroot.XXXXXXX')"
 chmod --silent 777 "$HOST_DOCROOT"
 printf 'Created temporary docroot in %s\n' "$HOST_DOCROOT"
 
+MARIADB_DOCKER_ID=
+DOCKER_ID=
 remove_temp_docroot() {
 	rm -r -f "$HOST_DOCROOT"
+	if test "$MARIADB_DOCKER_ID" != ""; then
+		docker stop "$MARIADB_DOCKER_ID" || true
+		MARIADB_DOCKER_ID=
+	fi
 }
 trap remove_temp_docroot EXIT
 
@@ -42,7 +56,7 @@ while test $# -gt 0; do
 		fi
 		;;
 	-i|--interactive)
-		_it_opts='-i -t'
+		_it_opts='-i --tty=true'
 		;;
 	-h|--help)
 		help
@@ -100,17 +114,18 @@ MARIADB_DOCKER_IP_ADDR="$(docker inspect --format='{{range .NetworkSettings.Netw
 # this means that it will not accept incoming connections until such initialization completes.
 # This may cause issues when using automation tools,
 # such as docker-compose, which start several containers simultaneously.
-printf 'Waiting for %s:3306 being available\n' "$MARIADB_DOCKER_IP_ADDR"
-while ! (read -N 1 -r -s < "/dev/tcp/${MARIADB_DOCKER_IP_ADDR}/3306") >/dev/null 2>&1; do
-	printf 'Waiting...\n'
-	sleep 1s
-done
+printf 'Waiting for TCP %s:3306 being available\n' "$MARIADB_DOCKER_IP_ADDR"
 
-exit 0
+declare -r TCP_TEST_COM="${NC_COMMAND} -z -w 2 \"${MARIADB_DOCKER_IP_ADDR}\" 3306 >/dev/null 2>&1"
+while ! eval "$TCP_TEST_COM"; do
+	printf 'Waiting...\n'
+	sleep 2s
+done
 
 declare -a -r DOCKER_ARGV=(
 	"docker"
 	"run"
+	"-d"
 	"$_it_opts"
 	"--mount"
 	"\"type=bind,src=${HOST_DOCROOT},dst=${DOCKER_DOCROOT},bind-nonrecursive=true\""
@@ -119,9 +134,26 @@ declare -a -r DOCKER_ARGV=(
 	"-w"
 	"\"$DOCKER_DOCROOT\""
 	"--rm"
+	"-e"
+	"\"WORDPRESS_DB_HOST=${MARIADB_DOCKER_IP_ADDR}\""
+	"-e"
+	"\"WORDPRESS_DB_USER=root\""
+	"-e"
+	"\"WORDPRESS_DB_PASSWORD=\""
+	"-e"
+	"\"WORDPRESS_DB_NAME=${MYSQL_DATABASE}\""
+	"-e"
+	"\"WORDPRESS_DB_CHARSET=utf8mb4\""
+	"-e"
+	"\"WORDPRESS_DB_COLLATE=utf8mb4_general_ci\""
 	"\"${IMAGE_NAME}:latest\""
 )
 
-eval "${DOCKER_ARGV[*]}"
+DOCKER_ID="$(eval "${DOCKER_ARGV[*]}")"
+DOCKER_IP_ADDR="$(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$DOCKER_ID")"
+
+printf 'Connect to TCP %s:80 for further operations\n' "$DOCKER_IP_ADDR"
+
+docker container attach "$DOCKER_ID"
 
 exit 0
