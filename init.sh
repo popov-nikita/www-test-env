@@ -5,11 +5,29 @@
 set -u -e -o pipefail
 
 declare -r NC_COMMAND=nc
-
 if ! type -t "$NC_COMMAND" >/dev/null 2>&1; then
 	printf 'Please, install %s for network operations\n' "$NC_COMMAND"
 	exit 1
 fi
+
+declare -r CURL_COMMAND=curl
+if ! type -t "$CURL_COMMAND" >/dev/null 2>&1; then
+	printf 'Please, install %s for http operations\n' "$CURL_COMMAND"
+	exit 1
+fi
+
+declare -r TCP_TEST_COM="${NC_COMMAND} -z -w 2 \"\$1\" \"\$2\" >/dev/null 2>&1"
+tcp_wait() {
+	local space=
+	printf 'Waiting for TCP %s:%s being available\n' "$1" "$2"
+	while ! eval "$TCP_TEST_COM"; do
+		printf '%s*' "$space"
+		space=" "
+		sleep 2s
+	done
+	printf '\nTCP %s:%s is ready\n' "$1" "$2"
+	return 0
+}
 
 cd "$(dirname "$0")"
 
@@ -23,7 +41,7 @@ DOCKER_ID=
 remove_temp_docroot() {
 	rm -r -f "$HOST_DOCROOT"
 	if test "$MARIADB_DOCKER_ID" != ""; then
-		docker stop "$MARIADB_DOCKER_ID" || true
+		docker stop "$MARIADB_DOCKER_ID" >/dev/null 2>&1 || true
 		MARIADB_DOCKER_ID=
 	fi
 }
@@ -114,13 +132,7 @@ MARIADB_DOCKER_IP_ADDR="$(docker inspect --format='{{range .NetworkSettings.Netw
 # this means that it will not accept incoming connections until such initialization completes.
 # This may cause issues when using automation tools,
 # such as docker-compose, which start several containers simultaneously.
-printf 'Waiting for TCP %s:3306 being available\n' "$MARIADB_DOCKER_IP_ADDR"
-
-declare -r TCP_TEST_COM="${NC_COMMAND} -z -w 2 \"${MARIADB_DOCKER_IP_ADDR}\" 3306 >/dev/null 2>&1"
-while ! eval "$TCP_TEST_COM"; do
-	printf 'Waiting...\n'
-	sleep 2s
-done
+tcp_wait "$MARIADB_DOCKER_IP_ADDR" 3306
 
 declare -a -r DOCKER_ARGV=(
 	"docker"
@@ -152,8 +164,43 @@ declare -a -r DOCKER_ARGV=(
 DOCKER_ID="$(eval "${DOCKER_ARGV[*]}")"
 DOCKER_IP_ADDR="$(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$DOCKER_ID")"
 
-printf 'Connect to TCP %s:80 for further operations\n' "$DOCKER_IP_ADDR"
+tcp_wait "$DOCKER_IP_ADDR" 80
 
+# FIX ME
+declare -r WP_TITLE="${IMAGE_NAME}"
+declare -r WP_USER="root"
+declare -r WP_PASS="root"
+declare -r WP_EMAIL="webmaster@${HOST_NAME}"
+
+declare -a -r WORDPRESS_POST_ARGS=(
+	"\"weblog_title=${WP_TITLE}\""
+	"\"user_name=${WP_USER}\""
+	"\"admin_password=${WP_PASS}\""
+	"\"admin_password2=${WP_PASS}\""
+	"\"admin_email=${WP_EMAIL}\""
+	"\"blog_public=0\""
+)
+
+wordpress_install() {
+	local curl_cmd="${CURL_COMMAND} -s"
+	for v in "${WORDPRESS_POST_ARGS[@]}"; do
+		curl_cmd="${curl_cmd} --data-urlencode ${v}"
+	done
+	curl_cmd="${curl_cmd} \"http://${1}/wp-admin/install.php?step=2\""
+	eval "$curl_cmd"
+	return 0
+}
+
+printf 'Performing automated WordPress install...\n'
+wordpress_install "$DOCKER_IP_ADDR" >/dev/null 2>&1
+printf 'WordPress installed!\n'
+
+printf 'DONE! Log in to http://%s/wp-login.php using these credentials:\n' "$DOCKER_IP_ADDR"
+printf '    USERNAME: %s\n' "$WP_USER"
+printf '    PASSWORD: %s\n' "$WP_PASS"
+printf '\n'
+
+printf 'LOGS:\n'
 docker container attach "$DOCKER_ID"
 
 exit 0
