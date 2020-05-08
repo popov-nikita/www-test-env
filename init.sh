@@ -51,6 +51,7 @@ IMAGE_NAME='www-test-env'
 HOST_NAME="${IMAGE_NAME}.local"
 MODSECURITY_TARGZ='modsecurity-2.9.3.tar.gz'
 MODSECURITY_BUILD_DIR='/modsecurity-build-root'
+MODSECURITY_RULES_DIR='/modsecurity-rules'
 
 _is_prune=0
 _it_opts=
@@ -94,6 +95,7 @@ fi
 if test "$(docker images -q "${IMAGE_NAME}:latest")" = ""; then
 	docker build --build-arg="MODSECURITY_TARGZ=${MODSECURITY_TARGZ}" \
 	             --build-arg="MODSECURITY_BUILD_DIR=${MODSECURITY_BUILD_DIR}" \
+                     --build-arg="MODSECURITY_RULES_DIR=${MODSECURITY_RULES_DIR}" \
 	             -t "${IMAGE_NAME}:latest" .
 fi
 
@@ -181,19 +183,24 @@ declare -a -r WORDPRESS_POST_ARGS=(
 	"\"blog_public=0\""
 )
 
-wordpress_install() {
-	local curl_cmd="${CURL_COMMAND} -s"
-	for v in "${WORDPRESS_POST_ARGS[@]}"; do
-		curl_cmd="${curl_cmd} --data-urlencode ${v}"
+WP_INST_CMD="${CURL_COMMAND} -s"
+for v in "${WORDPRESS_POST_ARGS[@]}"; do
+	WP_INST_CMD="${WP_INST_CMD} --data-urlencode ${v}"
+done
+WP_INST_CMD="${WP_INST_CMD} \"http://${DOCKER_IP_ADDR}/wp-admin/install.php?step=2\" >/dev/null 2>&1"
+(
+	printf 'Performing automated WordPress install...\n'
+	space=
+	eval "$WP_INST_CMD" &
+	curl_pid="$!"
+	while kill -n 0 "${curl_pid}" >/dev/null 2>&1; do
+		printf '%s*' "$space"
+		space=" "
+		sleep 2s
 	done
-	curl_cmd="${curl_cmd} \"http://${1}/wp-admin/install.php?step=2\""
-	eval "$curl_cmd"
-	return 0
-}
-
-printf 'Performing automated WordPress install...\n'
-wordpress_install "$DOCKER_IP_ADDR" >/dev/null 2>&1
-printf 'WordPress installed!\n'
+	wait "${curl_pid}"
+	printf '\nWordPress installed!\n'
+)
 
 printf 'DONE! Log in to http://%s/wp-login.php using these credentials:\n' "$DOCKER_IP_ADDR"
 printf '    USERNAME: %s\n' "$WP_USER"

@@ -4,6 +4,7 @@ MAINTAINER Nikita Popov <npv1310_at_gmail.com>
 
 ARG MODSECURITY_TARGZ
 ARG MODSECURITY_BUILD_DIR
+ARG MODSECURITY_RULES_DIR
 
 # getservbyname & friends libc functions depend on `netbase` package. Caused some php tests fail
 RUN { \
@@ -64,5 +65,7 @@ RUN { \
     }
 
 COPY ep.sh /
+
+VOLUME ${MODSECURITY_RULES_DIR}
 
 ENTRYPOINT ["/ep.sh"]
