@@ -38,14 +38,19 @@ printf 'Created temporary docroot in %s\n' "$HOST_DOCROOT"
 
 MARIADB_DOCKER_ID=
 DOCKER_ID=
-remove_temp_docroot() {
-	rm -r -f "$HOST_DOCROOT"
+on_shutdown() {
+	if test "$DOCKER_ID" != ""; then
+		docker stop "$DOCKER_ID" >/dev/null 2>&1 || true
+		DOCKER_ID=
+	fi
 	if test "$MARIADB_DOCKER_ID" != ""; then
 		docker stop "$MARIADB_DOCKER_ID" >/dev/null 2>&1 || true
 		MARIADB_DOCKER_ID=
 	fi
+	rm -r -f "$HOST_DOCROOT"
+	HOST_DOCROOT=
 }
-trap remove_temp_docroot EXIT
+trap on_shutdown EXIT
 
 IMAGE_NAME='www-test-env'
 HOST_NAME="${IMAGE_NAME}.local"
@@ -54,13 +59,11 @@ MODSECURITY_BUILD_DIR='/modsecurity-build-root'
 MODSECURITY_RULES_DIR='/modsecurity-rules'
 
 _is_prune=0
-_it_opts=
 
 help() {
 	local prog="$(basename "$0")"
 
-	printf 'Usage: %s [[-i|--interactive] [-p|--prune] | [-h|--help]]\n' "$prog"
-	printf '       -i|--interactive    Attach pseudo TTY to STDIN of this container\n'
+	printf 'Usage: %s [[-p|--prune] | [-h|--help]]\n' "$prog"
 	printf '       -p|--prune          Remove existing image and rebuild it from scratch\n'
 	printf '       -h|--help           Show this message\n'
 
@@ -73,9 +76,6 @@ while test $# -gt 0; do
 		if test "$(docker images -q "${IMAGE_NAME}:latest")" != ""; then
 			_is_prune=1
 		fi
-		;;
-	-i|--interactive)
-		_it_opts='-i --tty=true'
 		;;
 	-h|--help)
 		help
@@ -140,7 +140,6 @@ declare -a -r DOCKER_ARGV=(
 	"docker"
 	"run"
 	"-d"
-	"$_it_opts"
 	"--mount"
 	"\"type=bind,src=${HOST_DOCROOT},dst=${DOCKER_DOCROOT},bind-nonrecursive=true\""
 	"-h"
@@ -208,6 +207,6 @@ printf '    PASSWORD: %s\n' "$WP_PASS"
 printf '\n'
 
 printf 'LOGS:\n'
-docker container attach "$DOCKER_ID"
+docker container logs --follow "$DOCKER_ID"
 
 exit 0
