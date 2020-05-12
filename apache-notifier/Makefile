@@ -4,12 +4,12 @@ clean:
 
 prog_name := apache-notifier
 
-files   := apache-notifier.c log.c
+files   := apache-notifier.c log.c process.c
 objects := $(patsubst %.c,%.o,$(files))
 
 CFLAGS  := -O2 -Wall -Wextra -D_GNU_SOURCE
 
-LDFLAGS := -no-pie -Wl,--gc-sections
+LDFLAGS := -no-pie -pthread -Wl,--gc-sections
 
 all: $(prog_name)
 

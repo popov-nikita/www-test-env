@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "log.h"
+#include "process.h"
 
 static int fs_watcher_get_handle(const char *path)
 {
@@ -240,6 +241,35 @@ static inline int safe_atol(const char *ascii, long *valp)
 	return 0;
 }
 
+static void _daemonize(long pid)
+{
+	if (pid) {
+		app_log(lvl_info,
+		        "%s: daemon PID = #%ld\n",
+		        __func__,
+		        pid);
+		_exit(0);
+	} else {
+		int fd;
+
+		(void) setsid();
+		fd = open("/dev/null", O_RDWR);
+		if (fd < 0)
+			return;
+		(void) dup2(fd, STDIN_FILENO);
+		(void) dup2(fd, STDOUT_FILENO);
+		/* We use STDERR_FILENO for logs */
+		(void) close(fd);
+	}
+}
+
+static void daemonize(void)
+{
+	if (xfork(_daemonize, _daemonize) < 0) {
+		_exit(1);
+	}
+}
+
 int main(int argc, char **argv)
 {
 	int c;
@@ -248,7 +278,7 @@ int main(int argc, char **argv)
 	enum log_levels lvl;
 	struct files _data;
 
-	lvl = lvl_warn;
+	lvl = lvl_info;
 	app_set_lvl(lvl);
 
 	while ((c = getopt_long(argc, argv, ":l:vsp:", _long_options, NULL)) != -1) {
@@ -308,6 +338,8 @@ int main(int argc, char **argv)
 			_exit(1);
 		}
 	}
+
+	daemonize();
 
 	_data.fd = fs_watcher_get_handle(tracked_path);
 	_data.func = fs_watcher_callback;
