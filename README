@@ -1,0 +1,94 @@
+Welcome to wordpress penetration testing environment!
+
+The purpose of this project is to provide flexible and easy-to-install
+web environment where different plugins of WordPress CMS [https://wordpress.org/]
+as well as CMS itself can be tested for vulnerabilities.
+
+In order to be able to protect against discovered vulnerabilities
+one has to use different Web Applications Firewalls (WAFs) if no patch is available
+or its installation proves to be difficult. Because of that this
+www-test-environment framework provides Security2 APACHE module
+[https://github.com/SpiderLabs/ModSecurity] with increased automatization. Now you can simply
+use your favorite text editor to create APACHE config files inside dedicated directory
+and be certain that APACHE daemon will automatically re-read altered config files
+and pull in a new configs.
+This is achieved with dedicated APACHE notifier daemon whose purpose is to
+track filesystem changes inside that directory and as soon as these changes occur, signal
+main APACHE daemon to re-initialize its internal structures with new configs.
+
+Framework's main features:
+* Easy-to-deploy WordPress environment. Even it's installation is automatic!
+All you have to do is to run ./init.sh script, wait for a while and log in into WordPress
+CMS with credentials root/root (by default).
+* Bind mount of APACHE document root and modsecurity config dir so you can
+examine and alter their contents from the host operating system.
+Should you alter APACHE configs the APACHE daemon is instantly notified to re-load
+its structures. Forget about using `service apache2 restart` over and over again!
+* Web-server logs console output. All actions taken by your HTTPD instance will be printed to your console.
+See what is going on inside your web environment :) [TODO: implement complete logs, including POST data dump]
+
+USAGE example:
+$ ./init.sh 
+Created docroot at _docroot
+Created rules directory at _rules
+Preparing apache-notifier.tar.gz...
+Waiting for TCP 172.17.0.2:3306 being available
+*******************************************************************************************************
+TCP 172.17.0.2:3306 is ready
+Waiting for TCP 172.17.0.3:80 being available
+******
+TCP 172.17.0.3:80 is ready
+Performing automated WordPress install...
+*********
+WordPress installed!
+DONE! Log in to http://172.17.0.3/wp-login.php using these credentials:
+    USERNAME: root
+    PASSWORD: root
+
+LOGS:
+--> DAEMON & other logs here <--
+
+After that you can do whatever you want with your newly launched WordPress environment
+including creating posts/users, adding plug-ins and so on. The WordPress files are available
+in _docroot subfolder. You can change them to debug different fragments of WordPress or its plug-ins
+to see values of specific variables or auxiliary information. Once you've found a vulnerability
+and learned how to exploit it you can write defensive modsecurity rule and
+try exploiting vulnerability with this rule being active.
+As was previosly mentioned you don't need to do any special manipulations in order to feed
+APACHE/modsecurity with this new rules:
+once you've saved them using the editor of your choice into _rules subdirectory
+they will automatically kick-in.
+
+`init.sh` is the key script which sets up this framework.
+This script accepts following options:
+    -h    print help message
+    -p    purge previously created framework's docker images and rebuild it from scratch
+Without options init.sh tries to re-use already existing image. If the docker images is not found it's build.
+NOTICE: init.sh script does not require root privileges in order to successfully run provided that your user
+is in `docker` secondary group (in which case docker daemon allows to execute its commands without root privileges).
+See DOCKER INSTALLATION paragraph below.
+Script `init.sh` heavily depends on presence of special file called `environ`
+which contains important settings for your testing environment (for example, names of the docker
+images or paths of bind-mounted directories containing document root or rule set).
+The format of `environ` file is this:
+<IDENTIFIER> <WHITESPACES> <VARIABLE VALUE>
+where
+<IDENTIFIER> -- is the name of variable which is set in init.sh during start up.
+<WHITESPACES> -- at least single whitespace is required in order to distinguish variable name
+from variable value
+<VARIABLE VALUE> -- put here the variable value in the way you would write it in shell script.
+
+For example:
+PATH='/bin:/usr/bin' in shell notation is equivalent to
+PATH    '/bin:/usr/bin' in `environ` notation. Shell would receive these single quotes
+as if you'd define that variable directly in shell script.
+
+IMPORTANT NOTICE:
+Not all variables are propagated to docker environment. The ones that really matter
+with reasonable default values are already provided in `environ` file.
+Everything else you define here simply overwrites default environment for `init.sh`
+itself.
+
+The 'glue' between shell variable semantics and `environ` file format is the awk program
+`parse-environ.awk`. It converts from one representation to another. See the source code
+for reference.
