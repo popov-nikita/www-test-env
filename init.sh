@@ -1,6 +1,6 @@
 #!/bin/bash
 # Uncomment this to see debug output
-set -x
+#set -x
 set -u -e -o pipefail
 
 if ! type -t nc curl >/dev/null 2>&1; then
@@ -107,6 +107,7 @@ if test -z "$(docker images -q "${IMAGE_NAME}:latest")"; then
 	             --build-arg="DOCKER_RULES_DIR=${DOCKER_RULES_DIR}" \
 	             --build-arg="DOCKER_DOCROOT=${DOCKER_DOCROOT}" \
 	             --build-arg="BUILD_DIR=${BUILD_DIR}" \
+	             --build-arg="APACHE_LOG_DIR=${APACHE_LOG_DIR}" \
 	             -t "${IMAGE_NAME}:latest" .
 fi
 
@@ -160,6 +161,8 @@ declare -a -r WORDPRESS_DOCKER_ARGV=(
 	"\"DOCKER_DOCROOT=${DOCKER_DOCROOT}\""
 	"-e"
 	"\"DOCKER_RULES_DIR=${DOCKER_RULES_DIR}\""
+	"-e"
+	"\"APACHE_LOG_DIR=${APACHE_LOG_DIR}\""
 	"-e"
 	"\"WORDPRESS_DB_HOST=${MARIADB_DOCKER_IP_ADDR}\""
 	"-e"

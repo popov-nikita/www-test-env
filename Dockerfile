@@ -7,6 +7,7 @@ ARG APACHE_NOTIFIER_TARGZ
 ARG DOCKER_RULES_DIR
 ARG DOCKER_DOCROOT
 ARG BUILD_DIR
+ARG APACHE_LOG_DIR
 
 # getservbyname & friends libc functions depend on `netbase` package. Caused some php tests fail
 RUN { \
@@ -87,6 +88,27 @@ RUN { \
         fi; \
         make -j$nr_threads clean all; \
         cp -f apache-notifier /usr/local/bin; \
+    }
+
+# We need to disable apache2's foreground operation
+RUN { \
+        set -u -e -x; \
+        wrapper_script='/usr/local/bin/apache2-foreground'; \
+        test -f "$wrapper_script"; \
+        sed -i -e '/^[[:space:]]*exec/ s@\-DFOREGROUND@@g' "$wrapper_script"; \
+    }
+
+# Since we are making apache2 daemonize (in which it redirects its stdout/stderr to /dev/null)
+# we need to fix its logs. Use standard descriptors of PID #1 (INIT) process
+RUN { \
+        set -u -e -x; \
+        umask 0000; \
+        mkdir -p "$APACHE_LOG_DIR"; \
+        cd "$APACHE_LOG_DIR"; \
+        echo > access.log; \
+        echo > error.log; \
+        echo > other_vhosts_access.log; \
+        chown -R --no-dereference www-data:www-data .;\
     }
 
 VOLUME ${DOCKER_RULES_DIR}

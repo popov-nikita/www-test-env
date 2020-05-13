@@ -22,3 +22,5 @@ WP_TITLE		"${IMAGE_NAME}"
 WP_USER			"root"
 WP_PASS			"root"
 WP_EMAIL		"webmaster@${HOST_NAME}"
+
+APACHE_LOG_DIR		'/apache2-logs-fixed'
