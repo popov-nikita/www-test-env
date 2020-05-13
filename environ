@@ -1,0 +1,24 @@
+DOCKER_DOCROOT		'/var/www/html'
+DOCKER_RULES_DIR	'/rules'
+
+MARIADB_DOCKER_ID
+WORDPRESS_DOCKER_ID
+
+APACHE_NOTIFIER_DIR	'apache-notifier'
+HOST_DOCROOT		'_docroot'
+HOST_RULES_DIR		'_rules'
+
+IMAGE_NAME		'www-test-env'
+HOST_NAME		"${IMAGE_NAME}.local"
+MODSECURITY_TARGZ	'modsecurity-2.9.3.tar.gz'
+APACHE_NOTIFIER_TARGZ	"${APACHE_NOTIFIER_DIR}.tar.gz"
+BUILD_DIR		'/build'
+
+MYSQL_IMAGE_NAME	'mariadb'
+MYSQL_ROOT_PASSWORD
+MYSQL_DATABASE		"$IMAGE_NAME"
+
+WP_TITLE		"${IMAGE_NAME}"
+WP_USER			"root"
+WP_PASS			"root"
+WP_EMAIL		"webmaster@${HOST_NAME}"

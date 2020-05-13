@@ -1,0 +1,10 @@
+#!/bin/bash
+
+_ppid="${PPID}"
+echo "Starting wrapper..." >&2
+echo "Arguments:" >&2
+echo "$0" "$@" >&2
+echo "Parent: ${_ppid}" >&2
+echo "Parent's cmdline: $(cat "/proc/${_ppid}/cmdline" | xargs -0 echo)" >&2
+
+exec /bin/bash -x "$@"

@@ -1,9 +1,12 @@
 all:
+make_targz:
 clean:
-.PHONY: all clean
+.PHONY: all make_targz clean
 
-prog_name := apache-notifier
+tar_gz_target  := $(APACHE_NOTIFIER_TARGZ)
+program_target := $(patsubst %.tar.gz,%,$(APACHE_NOTIFIER_TARGZ))
 
+h_files := log.h process.h
 files   := apache-notifier.c log.c process.c
 objects := $(patsubst %.c,%.o,$(files))
 
@@ -11,15 +14,20 @@ CFLAGS  := -O2 -Wall -Wextra -D_GNU_SOURCE
 
 LDFLAGS := -no-pie -pthread -Wl,--gc-sections
 
-all: $(prog_name)
+all: $(program_target)
 
-$(prog_name): $(objects)
+$(program_target): $(objects)
 	gcc $(LDFLAGS) -o $@ $^
 
 $(objects): %.o: %.c
 	gcc $(CFLAGS) -c -o $@ $<
 
-$(files):
+make_targz: $(tar_gz_target)
+
+$(tar_gz_target): $(files) $(h_files) Makefile
+	tar -c -z --transform 's@^@$(program_target)/@' -f $@ $^
+
+$(files) $(h_files) Makefile:
 
 clean:
-	rm -f $(objects) $(prog_name)
+	rm -f $(objects) $(program_target) $(tar_gz_target)

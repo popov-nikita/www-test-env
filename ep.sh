@@ -1,12 +1,16 @@
 #!/bin/bash
-
 # Uncomment this to see debug output
-#set -x
+set -x
 set -u -e -o pipefail
 
-# Copy files so it is possible to handle them from host
-umask 0000
-cp -R --no-preserve=all -t . /usr/src/wordpress/*
-chown -R "$(stat -c '%U:%G' /usr/src/wordpress/index.php)" *
+shopt -s dotglob nullglob
+
+# Copy files if they not exist
+if test \( \! -f index.php \) -o \( \! -d wp-admin \); then
+	rm -r -f *
+	umask 0000
+	cp -R --no-preserve=all -t . /usr/src/wordpress/*
+	chown -R "$(stat -c '%U:%G' /usr/src/wordpress/index.php)" *
+fi
 
 exec docker-entrypoint.sh apache2-foreground -k start

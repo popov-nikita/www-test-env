@@ -1,64 +1,31 @@
 #!/bin/bash
-
 # Uncomment this to see debug output
-#set -x
+set -x
 set -u -e -o pipefail
 
-declare -r NC_COMMAND=nc
-if ! type -t "$NC_COMMAND" >/dev/null 2>&1; then
-	printf 'Please, install %s for network operations\n' "$NC_COMMAND"
+if ! type -t nc curl >/dev/null 2>&1; then
+	printf 'This script requires nc and curl utilities for network operations\n'
 	exit 1
 fi
 
-declare -r CURL_COMMAND=curl
-if ! type -t "$CURL_COMMAND" >/dev/null 2>&1; then
-	printf 'Please, install %s for http operations\n' "$CURL_COMMAND"
+if ! type -t make >/dev/null 2>&1; then
+	printf 'This script requires make utility\n'
 	exit 1
 fi
-
-declare -r TCP_TEST_COM="${NC_COMMAND} -z -w 2 \"\$1\" \"\$2\" >/dev/null 2>&1"
-tcp_wait() {
-	local space=
-	printf 'Waiting for TCP %s:%s being available\n' "$1" "$2"
-	while ! eval "$TCP_TEST_COM"; do
-		printf '%s*' "$space"
-		space=" "
-		sleep 2s
-	done
-	printf '\nTCP %s:%s is ready\n' "$1" "$2"
-	return 0
-}
 
 cd "$(dirname "$0")"
 
-DOCKER_DOCROOT='/var/www/html'
-HOST_DOCROOT="$(mktemp --tmpdir=/tmp -d 'docroot.XXXXXXX')"
-chmod --silent 777 "$HOST_DOCROOT"
-printf 'Created temporary docroot in %s\n' "$HOST_DOCROOT"
-
-MARIADB_DOCKER_ID=
-DOCKER_ID=
-on_shutdown() {
-	if test "$DOCKER_ID" != ""; then
-		docker stop "$DOCKER_ID" >/dev/null 2>&1 || true
-		DOCKER_ID=
-	fi
-	if test "$MARIADB_DOCKER_ID" != ""; then
-		docker stop "$MARIADB_DOCKER_ID" >/dev/null 2>&1 || true
-		MARIADB_DOCKER_ID=
-	fi
-	rm -r -f "$HOST_DOCROOT"
-	HOST_DOCROOT=
+declare -r TCP_TEST_COM="nc -z -w 2 \"\$1\" \"\$2\" >/dev/null 2>&1"
+tcp_wait() {
+	printf 'Waiting for TCP %s:%s being available\n' "$1" "$2"
+	while ! eval "$TCP_TEST_COM"; do
+		printf '*'
+		sleep 2s
+	done
+	printf '\n'
+	printf 'TCP %s:%s is ready\n' "$1" "$2"
+	return 0
 }
-trap on_shutdown EXIT
-
-IMAGE_NAME='www-test-env'
-HOST_NAME="${IMAGE_NAME}.local"
-MODSECURITY_TARGZ='modsecurity-2.9.3.tar.gz'
-MODSECURITY_BUILD_DIR='/modsecurity-build-root'
-MODSECURITY_RULES_DIR='/modsecurity-rules'
-
-_is_prune=0
 
 help() {
 	local prog="$(basename "$0")"
@@ -70,11 +37,53 @@ help() {
 	exit 1
 }
 
+cleanup() {
+	if test -n "${WORDPRESS_DOCKER_ID:-}"; then
+		docker stop "$WORDPRESS_DOCKER_ID" >/dev/null 2>&1 || true
+		unset -v WORDPRESS_DOCKER_ID
+	fi
+
+	if test -n "${MARIADB_DOCKER_ID:-}"; then
+		docker stop "$MARIADB_DOCKER_ID" >/dev/null 2>&1 || true
+		unset -v MARIADB_DOCKER_ID
+	fi
+	exit 1
+}
+trap cleanup EXIT
+#HUP INT QUIT TERM
+
+# Load environment
+declare -r ENV_FILE=environ
+declare -r ENV_PREPROCESSOR=parse-environ.awk
+if test -f "$ENV_FILE"; then
+	eval "$(awk -f "$ENV_PREPROCESSOR" "$ENV_FILE")"
+fi
+
+if ! test -d "$HOST_DOCROOT"; then
+	mkdir -p "$HOST_DOCROOT"
+	chmod --silent 777 "$HOST_DOCROOT"
+	printf 'Created docroot at %s\n' "$HOST_DOCROOT"
+fi
+HOST_DOCROOT="$(realpath "$HOST_DOCROOT")"
+
+if ! test -d "$HOST_RULES_DIR"; then
+	mkdir -p "$HOST_RULES_DIR"
+	chmod --silent 777 "$HOST_RULES_DIR"
+	printf 'Created rules directory at %s\n' "$HOST_RULES_DIR"
+fi
+HOST_RULES_DIR="$(realpath "$HOST_RULES_DIR")"
+
+export APACHE_NOTIFIER_TARGZ
+printf 'Preparing %s...\n' "$APACHE_NOTIFIER_TARGZ"
+make --no-print-directory -s -C apache-notifier clean make_targz
+mv -f "apache-notifier/${APACHE_NOTIFIER_TARGZ}" .
+
+_want_prune=
 while test $# -gt 0; do
 	case "$1" in
 	-p|--prune)
-		if test "$(docker images -q "${IMAGE_NAME}:latest")" != ""; then
-			_is_prune=1
+		if test -n "$(docker images -q "${IMAGE_NAME}:latest")"; then
+			_want_prune='yes'
 		fi
 		;;
 	-h|--help)
@@ -88,23 +97,21 @@ while test $# -gt 0; do
 	shift
 done
 
-if test $_is_prune -eq 1; then
+if test -n "$_want_prune"; then
 	docker rmi -f "${IMAGE_NAME}:latest"
 fi
 
-if test "$(docker images -q "${IMAGE_NAME}:latest")" = ""; then
+if test -z "$(docker images -q "${IMAGE_NAME}:latest")"; then
 	docker build --build-arg="MODSECURITY_TARGZ=${MODSECURITY_TARGZ}" \
-	             --build-arg="MODSECURITY_BUILD_DIR=${MODSECURITY_BUILD_DIR}" \
-                     --build-arg="MODSECURITY_RULES_DIR=${MODSECURITY_RULES_DIR}" \
+	             --build-arg="APACHE_NOTIFIER_TARGZ=${APACHE_NOTIFIER_TARGZ}" \
+	             --build-arg="DOCKER_RULES_DIR=${DOCKER_RULES_DIR}" \
+	             --build-arg="DOCKER_DOCROOT=${DOCKER_DOCROOT}" \
+	             --build-arg="BUILD_DIR=${BUILD_DIR}" \
 	             -t "${IMAGE_NAME}:latest" .
 fi
 
-MYSQL_ROOT_PASSWORD=
-MYSQL_DATABASE="$IMAGE_NAME"
-
-declare -r MARIADB_IMAGE_NAME='mariadb'
-if test "$(docker images -q "${MARIADB_IMAGE_NAME}:latest")" = ""; then
-	docker image pull "${MARIADB_IMAGE_NAME}:latest"
+if test -z "$(docker images -q "${MYSQL_IMAGE_NAME}:latest")"; then
+	docker image pull "${MYSQL_IMAGE_NAME}:latest"
 fi
 
 declare -a -r MARIADB_DOCKER_ARGV=(
@@ -118,7 +125,7 @@ declare -a -r MARIADB_DOCKER_ARGV=(
 	"\"MYSQL_DATABASE=${MYSQL_DATABASE}\""
 	"-e"
 	"\"MYSQL_ALLOW_EMPTY_PASSWORD=yes\""
-	"\"${MARIADB_IMAGE_NAME}:latest\""
+	"\"${MYSQL_IMAGE_NAME}:latest\""
 	"--character-set-server=utf8mb4"
 	"--collation-server=utf8mb4_general_ci"
 )
@@ -136,17 +143,23 @@ MARIADB_DOCKER_IP_ADDR="$(docker inspect --format='{{range .NetworkSettings.Netw
 # such as docker-compose, which start several containers simultaneously.
 tcp_wait "$MARIADB_DOCKER_IP_ADDR" 3306
 
-declare -a -r DOCKER_ARGV=(
+declare -a -r WORDPRESS_DOCKER_ARGV=(
 	"docker"
 	"run"
 	"-d"
 	"--mount"
 	"\"type=bind,src=${HOST_DOCROOT},dst=${DOCKER_DOCROOT},bind-nonrecursive=true\""
+	"--mount"
+	"\"type=bind,src=${HOST_RULES_DIR},dst=${DOCKER_RULES_DIR},ro=true,bind-nonrecursive=true\""
 	"-h"
-	"\"$HOST_NAME\""
+	"\"${HOST_NAME}\""
 	"-w"
-	"\"$DOCKER_DOCROOT\""
+	"\"${DOCKER_DOCROOT}\""
 	"--rm"
+	"-e"
+	"\"DOCKER_DOCROOT=${DOCKER_DOCROOT}\""
+	"-e"
+	"\"DOCKER_RULES_DIR=${DOCKER_RULES_DIR}\""
 	"-e"
 	"\"WORDPRESS_DB_HOST=${MARIADB_DOCKER_IP_ADDR}\""
 	"-e"
@@ -162,16 +175,10 @@ declare -a -r DOCKER_ARGV=(
 	"\"${IMAGE_NAME}:latest\""
 )
 
-DOCKER_ID="$(eval "${DOCKER_ARGV[*]}")"
-DOCKER_IP_ADDR="$(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$DOCKER_ID")"
+WORDPRESS_DOCKER_ID="$(eval "${WORDPRESS_DOCKER_ARGV[*]}")"
+WORDPRESS_DOCKER_IP_ADDR="$(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$WORDPRESS_DOCKER_ID")"
 
-tcp_wait "$DOCKER_IP_ADDR" 80
-
-# FIX ME
-declare -r WP_TITLE="${IMAGE_NAME}"
-declare -r WP_USER="root"
-declare -r WP_PASS="root"
-declare -r WP_EMAIL="webmaster@${HOST_NAME}"
+tcp_wait "$WORDPRESS_DOCKER_IP_ADDR" 80
 
 declare -a -r WORDPRESS_POST_ARGS=(
 	"\"weblog_title=${WP_TITLE}\""
@@ -182,31 +189,31 @@ declare -a -r WORDPRESS_POST_ARGS=(
 	"\"blog_public=0\""
 )
 
-WP_INST_CMD="${CURL_COMMAND} -s"
+WP_INST_CMD="curl -s"
 for v in "${WORDPRESS_POST_ARGS[@]}"; do
 	WP_INST_CMD="${WP_INST_CMD} --data-urlencode ${v}"
 done
-WP_INST_CMD="${WP_INST_CMD} \"http://${DOCKER_IP_ADDR}/wp-admin/install.php?step=2\" >/dev/null 2>&1"
+WP_INST_CMD="${WP_INST_CMD} \"http://${WORDPRESS_DOCKER_IP_ADDR}/wp-admin/install.php?step=2\" >/dev/null 2>&1"
 (
 	printf 'Performing automated WordPress install...\n'
-	space=
 	eval "$WP_INST_CMD" &
-	curl_pid="$!"
-	while kill -n 0 "${curl_pid}" >/dev/null 2>&1; do
-		printf '%s*' "$space"
-		space=" "
+	CURL_PID="$!"
+	while kill -n 0 "$CURL_PID" >/dev/null 2>&1; do
+		printf '*'
 		sleep 2s
 	done
-	wait "${curl_pid}"
-	printf '\nWordPress installed!\n'
+	wait "$CURL_PID"
+	unset -v CURL_PID
+	printf '\n'
+	printf 'WordPress installed!\n'
 )
 
-printf 'DONE! Log in to http://%s/wp-login.php using these credentials:\n' "$DOCKER_IP_ADDR"
+printf 'DONE! Log in to http://%s/wp-login.php using these credentials:\n' "$WORDPRESS_DOCKER_IP_ADDR"
 printf '    USERNAME: %s\n' "$WP_USER"
 printf '    PASSWORD: %s\n' "$WP_PASS"
 printf '\n'
 
 printf 'LOGS:\n'
-docker container logs --follow "$DOCKER_ID"
+docker container logs --follow "$WORDPRESS_DOCKER_ID"
 
 exit 0
