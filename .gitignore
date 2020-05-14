@@ -1,6 +1,7 @@
 /_docroot/*
 /_rules/*
 /apache-notifier/*
-!/apache-notifier/*.[ch]
+!/apache-notifier/include/
+!/apache-notifier/*.c
 !/apache-notifier/Makefile
 /apache-notifier.tar.gz
