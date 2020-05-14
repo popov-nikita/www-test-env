@@ -19,37 +19,51 @@ $(_TARGETS):
 	@$(MAKE) -C $(_PROJ_ROOT) --no-print-directory $(@)
 else
 
-ifeq ($(origin APACHE_NOTIFIER_TARGZ),undefined)
-        $(warning Variable APACHE_NOTIFIER_TARGZ is not provided. Setting default value)
-        APACHE_NOTIFIER_TARGZ := $(notdir $(_CWD)).tar.gz
+INC_DIR := include
+LIB_DIR := lib
+EXE_FILENAME := $(notdir $(_CWD))
+LIB_FILENAME := $(EXE_FILENAME).a
+TAR_FILENAME := $(EXE_FILENAME).tar.gz
+
+INC_DIR_ABS := $(realpath $(INC_DIR))
+LIB_DIR_ABS := $(realpath $(LIB_DIR))
+ifeq ($(and $(INC_DIR_ABS),$(LIB_DIR_ABS)),)
+        $(error realpath failed)
 endif
+export LIB_FILENAME INC_DIR_ABS LIB_DIR_ABS
 
-tar_gz_filename := $(APACHE_NOTIFIER_TARGZ)
-executable_filename := $(patsubst %.tar.gz,%,$(tar_gz_filename))
-
-h_files := $(wildcard include/*)
-files := apache-notifier.c log.c process.c
+h_files := $(wildcard $(INC_DIR_ABS)/*)
+files := apache-notifier.c
 objects := $(patsubst %.c,%.o,$(files))
 
-CFLAGS := -O2 -Wall -Wextra -Wno-unused-result -I./include -D_GNU_SOURCE
+CFLAGS := -O2 -Wall -Wextra -Wno-unused-result -I$(INC_DIR_ABS) -D_GNU_SOURCE
+export CFLAGS
 LDFLAGS := -no-pie -pthread -Wl,--gc-sections
 
-all: $(executable_filename)
+all: $(EXE_FILENAME)
 
-$(executable_filename): $(objects)
+# Order of linking is important:
+#    As a general rule the libraries should follow application object files
+#    in command line
+# One can overcome this by using linking groups but this is another story...
+$(EXE_FILENAME): $(objects) $(LIB_DIR)/$(LIB_FILENAME)
 	gcc $(LDFLAGS) -o $@ $^
 
-# Avoid distinct dependencies by declaring each object file depend on all custom header files
+$(LIB_DIR)/$(LIB_FILENAME):
+	$(MAKE) -C $(LIB_DIR) --no-print-directory $(LIB_FILENAME)
+
 $(objects): %.o: %.c $(h_files)
 	gcc $(CFLAGS) -c -o $@ $<
 
-make_targz: $(tar_gz_filename)
-
-$(tar_gz_filename): $(files) $(h_files) Makefile
-	tar -c -z --transform 's@^@$(executable_filename)/@' -f $@ $^
-
 $(files) $(h_files) Makefile:
 
+# Make sure everything is cleaned before creating archive!
+make_targz:
+	tar -c -z --transform 's@^@$(EXE_FILENAME)/@' -f $(TAR_FILENAME) $(files) Makefile $(INC_DIR) $(LIB_DIR)
+
 clean:
-	rm -f $(objects) $(executable_filename) $(tar_gz_filename)
+	rm -f $(objects) $(EXE_FILENAME)
+	$(MAKE) -C $(LIB_DIR) --no-print-directory clean
+	if test -f $(TAR_FILENAME); then unlink $(TAR_FILENAME); fi
+
 endif
