@@ -9,12 +9,11 @@ enum log_levels {
 	lvl_info,
 	lvl_warn,
 	lvl_err,
-	lvl_crit,
 	_NR_LVLS,
 };
 
-enum log_levels app_set_lvl(enum log_levels lvl);
-int app_redirect_logs(const char *path);
+/* Must be called before daemonization */
+int app_init_logs(const char *path, enum log_levels log_lvl);
 void app_log(enum log_levels lvl, const char *fmt, ...);
 
 #endif

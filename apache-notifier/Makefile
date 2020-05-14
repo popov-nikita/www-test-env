@@ -31,7 +31,7 @@ h_files := $(wildcard include/*)
 files := apache-notifier.c log.c process.c
 objects := $(patsubst %.c,%.o,$(files))
 
-CFLAGS := -O2 -Wall -Wextra -I./include -D_GNU_SOURCE
+CFLAGS := -O2 -Wall -Wextra -Wno-unused-result -I./include -D_GNU_SOURCE
 LDFLAGS := -no-pie -pthread -Wl,--gc-sections
 
 all: $(executable_filename)

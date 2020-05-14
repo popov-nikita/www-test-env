@@ -77,3 +77,30 @@ ret_unmap:
 ret:
 	return rc;
 }
+
+static void _daemonize(long pid)
+{
+	if (pid) {
+		app_log(lvl_debug,
+		        "%s: daemon PID = #%ld\n",
+		        __func__,
+		        pid);
+		_exit(0);
+	} else {
+		int fd;
+
+		(void) setsid();
+		fd = open("/dev/null", O_RDWR);
+		if (fd < 0)
+			return;
+		(void) dup2(fd, STDIN_FILENO);
+		(void) dup2(fd, STDOUT_FILENO);
+		(void) dup2(fd, STDERR_FILENO);
+		(void) close(fd);
+	}
+}
+
+int daemonize(void)
+{
+	return xfork(_daemonize, _daemonize);
+}

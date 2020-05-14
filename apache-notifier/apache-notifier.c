@@ -241,45 +241,13 @@ static inline int safe_atol(const char *ascii, long *valp)
 	return 0;
 }
 
-static void _daemonize(long pid)
-{
-	if (pid) {
-		app_log(lvl_info,
-		        "%s: daemon PID = #%ld\n",
-		        __func__,
-		        pid);
-		_exit(0);
-	} else {
-		int fd;
-
-		(void) setsid();
-		fd = open("/dev/null", O_RDWR);
-		if (fd < 0)
-			return;
-		(void) dup2(fd, STDIN_FILENO);
-		(void) dup2(fd, STDOUT_FILENO);
-		/* We use STDERR_FILENO for logs */
-		(void) close(fd);
-	}
-}
-
-static void daemonize(void)
-{
-	if (xfork(_daemonize, _daemonize) < 0) {
-		_exit(1);
-	}
-}
-
 int main(int argc, char **argv)
 {
 	int c;
-	const char *log_file = NULL, *tracked_path;
+	const char *log_file = "-", *pid_ascii = NULL, *tracked_path;
+	enum log_levels log_lvl = lvl_info;
 	long apache_pid = -1;
-	enum log_levels lvl;
 	struct files _data;
-
-	lvl = lvl_info;
-	app_set_lvl(lvl);
 
 	while ((c = getopt_long(argc, argv, ":l:vsp:", _long_options, NULL)) != -1) {
 		switch (c) {
@@ -287,59 +255,61 @@ int main(int argc, char **argv)
 			log_file = optarg;
 			break;
 		case 'v':
-			--lvl;
-			lvl = app_set_lvl(lvl);
+			--log_lvl;
 			break;
 		case 's':
-			++lvl;
-			lvl = app_set_lvl(lvl);
+			++log_lvl;
 			break;
 		case 'p':
-			(void) safe_atol(optarg, &apache_pid);
-
-			if (apache_pid <= 0) {
-				app_log(lvl_err,
-				        "%s: invalid PID\n",
-				        __func__);
-				_exit(1);
-			}
-
-			if (kill(apache_pid, 0) < 0) {
-				app_log(lvl_err,
-				        "%s: PID [%ld]\n",
-				        __func__,
-				        apache_pid);
-				_exit(1);
-			}
-
+			pid_ascii = optarg;
 			break;
 		default:
-			app_log(lvl_err,
-			        "%s: parsing error\n",
-			        __func__);
+			/* Logs are not initialized yet. Fallback to printf */
+			fprintf(stderr,
+			        "%s: error while parsing options\n",
+			        argv[0]);
 			_exit(1);
 		}
 	}
 
 	if (optind + 1 != argc) {
+		/* Logs are not initialized yet. Fallback to printf */
+		fprintf(stderr,
+		        "%s: error while parsing options\n",
+		        argv[0]);
+		_exit(1);
+	}
+
+	tracked_path = argv[optind];
+
+	if (app_init_logs(log_file, log_lvl) < 0) {
+		fprintf(stderr,
+		        "%s: failed to initialize logs with %s\n",
+		        argv[0],
+		        log_file);
+		_exit(1);
+	}
+
+	/* We've made it. Now the log module is ready */
+	(void) safe_atol(pid_ascii, &apache_pid);
+
+	if (apache_pid <= 0) {
 		app_log(lvl_err,
-		        "%s: no tracked path found in arguments\n",
+		        "%s: invalid PID\n",
 		        __func__);
 		_exit(1);
 	}
-	tracked_path = argv[optind];
 
-	if (log_file) {
-		if (app_redirect_logs(log_file) < 0) {
-			app_log(lvl_err,
-			        "%s: failed to redirect logs to %s\n",
-			        __func__,
-			        log_file);
-			_exit(1);
-		}
+	if (kill(apache_pid, 0) < 0) {
+		app_log(lvl_err,
+		        "%s: failed to check process with PID = %ld\n",
+		        __func__,
+		        apache_pid);
+		_exit(1);
 	}
 
-	daemonize();
+	if (daemonize() < 0)
+		_exit(1);
 
 	_data.fd = fs_watcher_get_handle(tracked_path);
 	_data.func = fs_watcher_callback;
