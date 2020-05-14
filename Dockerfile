@@ -71,6 +71,13 @@ RUN { \
         test \( -d "$conf_avail_dir" \) -a \( -w "$conf_avail_dir" \); \
         echo "<IfModule security2_module>" > ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "    IncludeOptional ${DOCKER_RULES_DIR}/*.conf" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecAuditLog $APACHE_LOG_DIR/modsec_audit.log" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecDebugLog $APACHE_LOG_DIR/modsec_debug.log" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecDebugLogLevel 9" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecRuleEngine \"On\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecAuditEngine \"RelevantOnly\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecPcreMatchLimit \"1150500\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecPcreMatchLimitRecursion \"1150500\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "</IfModule>" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         a2enconf mod_security2-rules; \
     }
