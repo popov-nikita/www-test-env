@@ -61,10 +61,9 @@ int app_init_logs(const char *path, enum log_levels log_lvl)
 	if (log_fd < 0)
 		goto ret;
 
-	/* Ensure log filedes is closed upon successful execve() */
 	if ((flags = fcntl(log_fd, F_GETFD)) < 0)
 		goto ret_close;
-	if (fcntl(log_fd, F_SETFD, (flags | FD_CLOEXEC)) < 0)
+	if (fcntl(log_fd, F_SETFD, (flags & ~FD_CLOEXEC)) < 0)
 		goto ret_close;
 
 	/* Obtain pretty executable name, so we print it in log entries */
@@ -91,6 +90,10 @@ ret_close:
 	}
 ret:
 	return rc;
+}
+
+int app_get_log_fd(void) {
+	return _app_log_fd;
 }
 
 /* <APP name> at <GMT date> [PID #<number>] (<severity>) <msg> */

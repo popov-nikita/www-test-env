@@ -45,11 +45,10 @@ static int fs_watcher_get_handle(const char *path)
 static void fs_watcher_callback(int fd, void *arg)
 {
 #define BUF_ALGN __attribute__((aligned(__alignof__(struct inotify_event))))
-	unsigned char buf[1 << 12] BUF_ALGN, *bufp;
+	char buf[1 << 12] BUF_ALGN;
 #undef BUF_ALGN
-	char msg[1 << 12], *msgp;
-	const struct inotify_event *evt;
 	long nr_read, apache_pid;
+	int rc;
 
 	apache_pid = (long) ((unsigned long) arg);
 
@@ -67,77 +66,39 @@ static void fs_watcher_callback(int fd, void *arg)
 
 		if (nr_read <= 0)
 			break;
+	}
 
-		msgp = msg;
-		msgp[0] = '\0';
+	snprintf(buf, sizeof(buf), "apache2 -t >/proc/self/fd/%d 2>&1", app_get_log_fd());
+	app_log(lvl_debug,
+		    "%s: executing system(\"%s\")\n",
+		    __func__,
+		    buf);
 
-		for (bufp = buf; bufp < &buf[nr_read];) {
-			evt = (const struct inotify_event *) bufp;
-			bufp += (sizeof(struct inotify_event) + evt->len);
+	app_log(lvl_info,
+		    "Checking config files:\n");
 
-			if (evt->len) {
-				unsigned int namelen;
-				char *namepos;
+	rc = system(buf);
 
-				namelen = strlen(evt->name);
-				namepos = strstr(msg, evt->name);
-				if (namepos &&
-				    (namepos[namelen] == '\0' || namepos[namelen] == ' ')) {
-					
-					app_log(lvl_debug, "%s: %s found in \"%s\"\n",
-					        __func__, evt->name, msg);
-					continue;
-				}
+	if (rc < 0 || rc == 127) {
+		app_log(lvl_err,
+			    "%s: system() returned %d\n",
+			    __func__,
+			    rc);
+		_exit(1);
+	}
 
-				if (msgp >= &msg[sizeof(msg)]) {
-					app_log(lvl_debug, "%s: ignoring %s because \"%s\" is full\n",
-					        __func__, evt->name, msg);
-					continue;
-				}
+	if (rc > 0) {
+		app_log(lvl_warn,
+			    "Error found in config file. Please fix it\n");
+		return;
+	}
 
-				if (msgp != msg)
-					*(msgp++) = ' ';
-
-				{
-					unsigned int copysz;
-
-					copysz = (unsigned int) (&msg[sizeof(msg)] - msgp);
-					if (copysz > namelen)
-						copysz = namelen;
-					msgp = mempcpy(msgp, evt->name, copysz);
-					if (msgp < &msg[sizeof(msg)])
-						*msgp = '\0';
-					else
-						msg[sizeof(msg) - 1] = '\0';
-				}
-			}
-		}
-
-		if (msgp != msg) {
-			app_log(lvl_info,
-			        "%s: altered files [%s], sending signal to PID #%ld\n",
-			        __func__,
-			        msg,
-			        apache_pid);
-
-			/* From APACHE httpd docs [https://httpd.apache.org/docs/2.4/stopping.html]:
-			   ```
-			     As with a graceful restart,
-			     a syntax check is run before the restart is attempted.
-			     If your configuration file has errors in it,
-			     the restart will not be attempted,
-			     and you will receive notification of the syntax error(s).
-			   ```
-			   So there is no point in spawning another httpd instance
-			   to check config correctness. */
-			if (kill(apache_pid, SIGHUP) < 0) {
-				app_log(lvl_err,
-				        "%s: kill(%ld, SIGHUP) failed\n",
-				        __func__,
-				        apache_pid);
-				_exit(1);
-			}
-		}
+	if (kill(apache_pid, SIGHUP) < 0) {
+		app_log(lvl_err,
+			    "%s: kill(%ld, SIGHUP) failed\n",
+			    __func__,
+			    apache_pid);
+		_exit(1);
 	}
 }
 

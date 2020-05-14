@@ -14,6 +14,7 @@ enum log_levels {
 
 /* Must be called before daemonization */
 int app_init_logs(const char *path, enum log_levels log_lvl);
+int app_get_log_fd(void);
 void app_log(enum log_levels lvl, const char *fmt, ...);
 
 #endif
