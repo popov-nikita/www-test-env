@@ -1,7 +1,9 @@
 all:
 make_targz:
+dummy_all:
+dummy_clean:
 clean:
-.PHONY: all make_targz clean
+.PHONY: all make_targz dummy_all dummy_clean clean
 
 _PROJ_ROOT_RAW := $(dir $(firstword $(MAKEFILE_LIST)))
 _PROJ_ROOT := $(realpath $(_PROJ_ROOT_RAW))
@@ -37,8 +39,8 @@ files := apache-notifier.c
 objects := $(patsubst %.c,%.o,$(files))
 
 CFLAGS := -O2 -Wall -Wextra -Wno-unused-result -I$(INC_DIR_ABS) -D_GNU_SOURCE
-export CFLAGS
 LDFLAGS := -no-pie -pthread -Wl,--gc-sections
+export CFLAGS LDFLAGS
 
 all: $(EXE_FILENAME)
 
@@ -51,6 +53,8 @@ $(EXE_FILENAME): $(objects) $(LIB_DIR)/$(LIB_FILENAME)
 
 $(LIB_DIR)/$(LIB_FILENAME):
 	$(MAKE) -C $(LIB_DIR) --no-print-directory $(LIB_FILENAME)
+# Sub-makefile knows better when to recompile library...
+.PHONY: $(LIB_DIR)/$(LIB_FILENAME)
 
 $(objects): %.o: %.c $(h_files)
 	gcc $(CFLAGS) -c -o $@ $<
@@ -60,6 +64,9 @@ $(files) $(h_files) Makefile:
 # Make sure everything is cleaned before creating archive!
 make_targz:
 	tar -c -z --transform 's@^@$(EXE_FILENAME)/@' -f $(TAR_FILENAME) $(files) Makefile $(INC_DIR) $(LIB_DIR)
+
+dummy_all dummy_clean:
+	$(MAKE) -C dummy-daemon --no-print-directory $(patsubst dummy_%,%,$@)
 
 clean:
 	rm -f $(objects) $(EXE_FILENAME)

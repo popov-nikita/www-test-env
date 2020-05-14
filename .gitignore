@@ -7,9 +7,14 @@
 
 !/apache-notifier/lib/
 !/apache-notifier/include/
+!/apache-notifier/dummy-daemon/
 
 /apache-notifier/lib/*
 !/apache-notifier/lib/*.c
 !/apache-notifier/lib/Makefile
+
+/apache-notifier/dummy-daemon/*
+!/apache-notifier/dummy-daemon/*.c
+!/apache-notifier/dummy-daemon/Makefile
 
 /apache-notifier.tar.gz
