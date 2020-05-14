@@ -33,7 +33,8 @@ apache-notifier -p "$APACHE_PID" -v "$DOCKER_RULES_DIR"
 tail -f -q -n '+1' "--pid=${APACHE_PID}" \
                    "${APACHE_LOG_DIR}/access.log" \
                    "${APACHE_LOG_DIR}/error.log" \
-                   "${APACHE_LOG_DIR}/other_vhosts_access.log"
+                   "${APACHE_LOG_DIR}/other_vhosts_access.log" \
+                   "${APACHE_LOG_DIR}/modsec_audit.log"
 
 unset -v APACHE_PID
 

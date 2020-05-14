@@ -83,6 +83,19 @@ PATH='/bin:/usr/bin' in shell notation is equivalent to
 PATH    '/bin:/usr/bin' in `environ` notation. Shell would receive these single quotes
 as if you'd define that variable directly in shell script.
 
+The modsecurity module is configured as follows:
+<IfModule security2_module>
+		IncludeOptional /rules/*.conf
+		SecAuditLog /apache2-logs-fixed/modsec_audit.log
+		SecDebugLog /apache2-logs-fixed/modsec_debug.log
+		SecDebugLogLevel 9
+		SecRuleEngine "On"
+		SecAuditEngine "RelevantOnly"
+		SecPcreMatchLimit "1150500"
+		SecPcreMatchLimitRecursion "1150500"
+</IfModule>
+If you need to change this configuration, then make the appropriate changes to the Dockerfile.
+
 IMPORTANT NOTICE:
 Not all variables are propagated to docker environment. The ones that really matter
 with reasonable default values are already provided in `environ` file.
