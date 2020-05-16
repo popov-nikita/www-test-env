@@ -37,7 +37,7 @@ static inline enum log_levels clamp_lvl(enum log_levels lvl)
 /* Must be called before daemonization */
 int app_init_logs(const char *path, enum log_levels log_lvl)
 {
-	int log_fd, rc, flags;
+	int log_fd, rc;
 	static char exe_name_buf[1024];
 	char *exe_name;
 	long nr_stored;
@@ -60,11 +60,6 @@ int app_init_logs(const char *path, enum log_levels log_lvl)
 
 	if (log_fd < 0)
 		goto ret;
-
-	if ((flags = fcntl(log_fd, F_GETFD)) < 0)
-		goto ret_close;
-	if (fcntl(log_fd, F_SETFD, (flags & ~FD_CLOEXEC)) < 0)
-		goto ret_close;
 
 	/* Obtain pretty executable name, so we print it in log entries */
 	nr_stored = readlink("/proc/self/exe", exe_name_buf, sizeof(exe_name_buf));
@@ -92,7 +87,8 @@ ret:
 	return rc;
 }
 
-int app_get_log_fd(void) {
+int app_get_log_fd(void)
+{
 	return _app_log_fd;
 }
 

@@ -7,6 +7,8 @@
 #include <getopt.h>
 #include <signal.h>
 #include <poll.h>
+/* For nanosleep() */
+#include <time.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,7 +21,8 @@ static int fs_watcher_get_handle(const char *path)
 {
 	int ifd;
 
-	ifd = inotify_init();
+	/* Make sure we do not leak this fd to child processes */
+	ifd = inotify_init1(IN_CLOEXEC);
 	if (ifd < 0)
 		return -1;
 
@@ -49,9 +52,18 @@ static void fs_watcher_callback(int fd, void *arg)
 #undef BUF_ALGN
 	long nr_read, apache_pid;
 	int rc;
+	/* 1,5 seconds delay */
+	const struct timespec time_of_sleep = (struct timespec) {
+		.tv_sec = 1,
+		.tv_nsec = (500 * 1000000),
+	};
 
 	apache_pid = (long) ((unsigned long) arg);
 
+	/* We do _not_ care about particular events for now.
+	   Each time we get here, we know that something within tracked folder
+	   was altered. But we still need to flush kernel's read queues
+	   so poll() doesn't return on already handled events */
 	while (1) {
 		nr_read = read(fd, buf, sizeof(buf));
 		if (nr_read < 0 && errno != EAGAIN) {
@@ -70,36 +82,41 @@ static void fs_watcher_callback(int fd, void *arg)
 
 	snprintf(buf, sizeof(buf), "apache2 -t >/proc/self/fd/%d 2>&1", app_get_log_fd());
 	app_log(lvl_debug,
-		    "%s: executing system(\"%s\")\n",
-		    __func__,
-		    buf);
-
-	app_log(lvl_info,
-		    "Checking config files:\n");
+	        "%s: executing system(\"%s\")\n",
+	        __func__,
+	        buf);
+	app_log(lvl_warn,
+	        "Checking config files...\n");
 
 	rc = system(buf);
 
 	if (rc < 0 || rc == 127) {
 		app_log(lvl_err,
-			    "%s: system() returned %d\n",
-			    __func__,
-			    rc);
+		        "%s: system(\"%s\") returned %d\n",
+		        __func__,
+		        buf,
+		        rc);
 		_exit(1);
 	}
 
-	if (rc > 0) {
+	if (!rc) {
+		if (kill(apache_pid, SIGHUP) < 0) {
+			app_log(lvl_err,
+			        "%s: kill(%ld, SIGHUP) failed\n",
+			        __func__,
+			        apache_pid);
+			_exit(1);
+		}
+		app_log(lvl_info,
+		        "Successfully sent SIGHUP to PID #%ld\n",
+		        apache_pid);
+	} else {
 		app_log(lvl_warn,
-			    "Error found in config file. Please fix it\n");
-		return;
+		        "Error found in config file. Please, fix it\n");
 	}
 
-	if (kill(apache_pid, SIGHUP) < 0) {
-		app_log(lvl_err,
-			    "%s: kill(%ld, SIGHUP) failed\n",
-			    __func__,
-			    apache_pid);
-		_exit(1);
-	}
+	/* Avoid firing signals too often */
+	(void) nanosleep(&time_of_sleep, NULL);
 }
 
 typedef void handler_t(int, void *);
