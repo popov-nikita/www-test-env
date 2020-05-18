@@ -115,7 +115,23 @@ RUN { \
         echo > access.log; \
         echo > error.log; \
         echo > other_vhosts_access.log; \
-        chown -R --no-dereference www-data:www-data .;\
+        chown -R --no-dereference www-data:www-data .; \
+    }
+
+# Create custom php config
+RUN { \
+        set -u -e -x; \
+        php_ini_dir='/usr/local/etc/php/conf.d'; \
+        test \( -d "$php_ini_dir" \) -a \( -w "$php_ini_dir" \); \
+        cd "$php_ini_dir"; \
+        echo '; Allow wrappers globally' > _custom.ini; \
+        echo 'allow_url_fopen=On' >> _custom.ini; \
+        echo 'allow_url_include=On' >> _custom.ini; \
+        echo '; Allow file uploads' >> _custom.ini; \
+        echo 'file_uploads=On' >> _custom.ini; \
+        echo '; Increase max allowed size of uploaded files. Needed for some plugins' >> _custom.ini; \
+        echo 'upload_max_filesize=80M' >> _custom.ini; \
+        echo 'post_max_size=81M' >> _custom.ini; \
     }
 
 VOLUME ${DOCKER_RULES_DIR}
