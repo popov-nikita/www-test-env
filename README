@@ -85,14 +85,27 @@ as if you'd define that variable directly in shell script.
 
 The modsecurity module is configured as follows:
 <IfModule security2_module>
-		IncludeOptional /rules/*.conf
-		SecAuditLog /apache2-logs-fixed/modsec_audit.log
-		SecDebugLog /apache2-logs-fixed/modsec_debug.log
-		SecDebugLogLevel 9
-		SecRuleEngine "On"
-		SecAuditEngine "RelevantOnly"
-		SecPcreMatchLimit "1150500"
-		SecPcreMatchLimitRecursion "1150500"
+               SecAuditEngine "RelevantOnly"
+               SecAuditLog "/apache2-logs-fixed/modsec_audit.log"
+               SecAuditLogParts "ABCFKZ"
+               SecAuditLogType "Serial"
+               SecAuditLogRelevantStatus "^.*$"
+               SecAuditLogFormat "Native"
+
+               SecDebugLogLevel "9"
+               SecDebugLog "/apache2-logs-fixed/modsec_debug.log"
+
+               SecRuleEngine "On"
+               # This is required in order to fully process POST payload
+               SecRequestBodyAccess "On"
+               # Avoid creation of extra temporary files
+               SecTmpSaveUploadedFiles "Off"
+               SecUploadKeepFiles "Off"
+               SecResponseBodyLimitAction "ProcessPartial"
+               SecPcreMatchLimit "1150500"
+               SecPcreMatchLimitRecursion "1150500"
+
+               IncludeOptional /rules/*.conf
 </IfModule>
 If you need to change this configuration, then make the appropriate changes to the Dockerfile.
 
