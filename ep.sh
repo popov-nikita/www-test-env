@@ -28,7 +28,7 @@ while ! test -r "$APACHE_PID_FILE"; do
 	sleep 1s
 done
 APACHE_PID="$(< "$APACHE_PID_FILE")"
-apache-notifier -p "$APACHE_PID" -v "$DOCKER_RULES_DIR"
+apache-notifier -p "$APACHE_PID" -s "$DOCKER_RULES_DIR"
 
 tail -f -q -n '+1' "--pid=${APACHE_PID}" \
                    "${APACHE_LOG_DIR}/access.log" \

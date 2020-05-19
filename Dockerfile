@@ -70,14 +70,22 @@ RUN { \
         conf_avail_dir=/etc/apache2/conf-available; \
         test \( -d "$conf_avail_dir" \) -a \( -w "$conf_avail_dir" \); \
         echo "<IfModule security2_module>" > ${conf_avail_dir}/mod_security2-rules.conf; \
-        echo "    IncludeOptional ${DOCKER_RULES_DIR}/*.conf" >> ${conf_avail_dir}/mod_security2-rules.conf; \
-        echo "    SecAuditLog $APACHE_LOG_DIR/modsec_audit.log" >> ${conf_avail_dir}/mod_security2-rules.conf; \
-        echo "    SecDebugLog $APACHE_LOG_DIR/modsec_debug.log" >> ${conf_avail_dir}/mod_security2-rules.conf; \
-        echo "    SecDebugLogLevel 9" >> ${conf_avail_dir}/mod_security2-rules.conf; \
-        echo "    SecRuleEngine \"On\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "    SecAuditEngine \"RelevantOnly\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecAuditLog \"${APACHE_LOG_DIR}/modsec_audit.log\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecAuditLogParts \"ABCKZ\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecAuditLogType \"Serial\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo '    SecAuditLogRelevantStatus "^(?:2|4|5)\d{2}$"' >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecAuditLogFormat \"JSON\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecDebugLogLevel \"0\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecDebugLog \"/dev/null\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecRuleEngine \"On\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "    SecPcreMatchLimit \"1150500\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "    SecPcreMatchLimitRecursion \"1150500\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    IncludeOptional ${DOCKER_RULES_DIR}/*.conf" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "</IfModule>" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         a2enconf mod_security2-rules; \
     }
@@ -115,6 +123,7 @@ RUN { \
         echo > access.log; \
         echo > error.log; \
         echo > other_vhosts_access.log; \
+        echo > modsec_audit.log; \
         chown -R --no-dereference www-data:www-data .; \
     }
 
