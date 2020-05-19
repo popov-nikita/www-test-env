@@ -72,16 +72,21 @@ RUN { \
         echo "<IfModule security2_module>" > ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "    SecAuditEngine \"RelevantOnly\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "    SecAuditLog \"${APACHE_LOG_DIR}/modsec_audit.log\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
-        echo "    SecAuditLogParts \"ABCKZ\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecAuditLogParts \"ABCFKZ\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "    SecAuditLogType \"Serial\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
-        echo '    SecAuditLogRelevantStatus "^(?:2|4|5)\d{2}$"' >> ${conf_avail_dir}/mod_security2-rules.conf; \
-        echo "    SecAuditLogFormat \"JSON\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo '    SecAuditLogRelevantStatus "^.*$"' >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecAuditLogFormat \"Native\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "" >> ${conf_avail_dir}/mod_security2-rules.conf; \
-        echo "    SecDebugLogLevel \"0\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
-        echo "    SecDebugLog \"/dev/null\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecDebugLogLevel \"9\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecDebugLog \"${APACHE_LOG_DIR}/modsec_debug.log\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "    SecRuleEngine \"On\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
-        echo "" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    # This is required in order to fully process POST payload" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecRequestBodyAccess \"On\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    # Avoid creation of extra temporary files" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecTmpSaveUploadedFiles \"Off\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecUploadKeepFiles \"Off\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecResponseBodyLimitAction \"ProcessPartial\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "    SecPcreMatchLimit \"1150500\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "    SecPcreMatchLimitRecursion \"1150500\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "" >> ${conf_avail_dir}/mod_security2-rules.conf; \
@@ -124,6 +129,7 @@ RUN { \
         echo > error.log; \
         echo > other_vhosts_access.log; \
         echo > modsec_audit.log; \
+        echo > modsec_debug.log; \
         chown -R --no-dereference www-data:www-data .; \
     }
 
