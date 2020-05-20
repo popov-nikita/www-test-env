@@ -27,6 +27,31 @@ tcp_wait() {
 	return 0
 }
 
+comm_wait() {
+	local pid
+	local comm="$1"
+	local msg_header="$2"
+	local msg_footer="$3"
+
+	echo "$msg_header"
+
+	(
+		eval "$comm" &
+		pid="$!"
+		while kill -n 0 "$pid" >/dev/null 2>&1; do
+			printf '*'
+			sleep 2s
+		done
+		wait "$pid"
+		unset -v pid
+		printf '\n'
+	)
+
+	echo "$msg_footer"
+
+	return 0
+}
+
 help() {
 	local prog="$(basename "$0")"
 
@@ -98,21 +123,33 @@ while test $# -gt 0; do
 done
 
 if test -n "$_want_prune"; then
+	echo "Removing previous image \"${IMAGE_NAME}:latest\"..."
 	docker rmi -f "${IMAGE_NAME}:latest" >/dev/null 2>&1
+	echo "Done!"
 fi
 
 if test -z "$(docker images -q "${IMAGE_NAME}:latest")"; then
-	docker build --build-arg="MODSECURITY_TARGZ=${MODSECURITY_TARGZ}" \
-	             --build-arg="APACHE_NOTIFIER_TARGZ=${APACHE_NOTIFIER_TARGZ}" \
-	             --build-arg="DOCKER_RULES_DIR=${DOCKER_RULES_DIR}" \
-	             --build-arg="DOCKER_DOCROOT=${DOCKER_DOCROOT}" \
-	             --build-arg="BUILD_DIR=${BUILD_DIR}" \
-	             --build-arg="APACHE_LOG_DIR=${APACHE_LOG_DIR}" \
-	             -t "${IMAGE_NAME}:latest" . >/dev/null 2>&1
+	declare -a -r WORDPRESS_DOCKER_BUILD_ARGS=(
+		"docker"
+		"build"
+		"--build-arg=\"MODSECURITY_TARGZ=${MODSECURITY_TARGZ}\""
+		"--build-arg=\"APACHE_NOTIFIER_TARGZ=${APACHE_NOTIFIER_TARGZ}\""
+		"--build-arg=\"DOCKER_RULES_DIR=${DOCKER_RULES_DIR}\""
+		"--build-arg=\"DOCKER_DOCROOT=${DOCKER_DOCROOT}\""
+		"--build-arg=\"BUILD_DIR=${BUILD_DIR}\""
+		"--build-arg=\"APACHE_LOG_DIR=${APACHE_LOG_DIR}\""
+		"-t"
+		"\"${IMAGE_NAME}:latest\""
+		"."
+	)
+
+	eval "${WORDPRESS_DOCKER_BUILD_ARGS[*]}"
 fi
 
 if test -z "$(docker images -q "${MYSQL_IMAGE_NAME}:latest")"; then
+	echo "Downloading \"${MYSQL_IMAGE_NAME}:latest\"..."
 	docker image pull "${MYSQL_IMAGE_NAME}:latest" >/dev/null 2>&1
+	echo "Done!"
 fi
 
 declare -a -r MARIADB_DOCKER_ARGV=(
@@ -197,19 +234,7 @@ for v in "${WORDPRESS_POST_ARGS[@]}"; do
 	WP_INST_CMD="${WP_INST_CMD} --data-urlencode ${v}"
 done
 WP_INST_CMD="${WP_INST_CMD} \"http://${WORDPRESS_DOCKER_IP_ADDR}/wp-admin/install.php?step=2\" >/dev/null 2>&1"
-(
-	printf 'Performing automated WordPress install...\n'
-	eval "$WP_INST_CMD" &
-	CURL_PID="$!"
-	while kill -n 0 "$CURL_PID" >/dev/null 2>&1; do
-		printf '*'
-		sleep 2s
-	done
-	wait "$CURL_PID"
-	unset -v CURL_PID
-	printf '\n'
-	printf 'WordPress installed!\n'
-)
+comm_wait "$WP_INST_CMD" 'Performing automated WordPress install...' 'WordPress installed!'
 
 printf 'DONE! Log in to http://%s/wp-login.php using these credentials:\n' "$WORDPRESS_DOCKER_IP_ADDR"
 printf '    USERNAME: %s\n' "$WP_USER"
