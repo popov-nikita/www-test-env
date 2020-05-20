@@ -72,7 +72,8 @@ RUN { \
         echo "<IfModule security2_module>" > ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "    SecAuditEngine \"RelevantOnly\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "    SecAuditLog \"${APACHE_LOG_DIR}/modsec_audit.log\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
-        echo "    SecAuditLogParts \"ABCFKZ\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    # We use 'I' here so multipart/form-data requests bodies are truncated" >> ${conf_avail_dir}/mod_security2-rules.conf; \
+        echo "    SecAuditLogParts \"ABFIZ\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "    SecAuditLogType \"Serial\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo '    SecAuditLogRelevantStatus "^.*$"' >> ${conf_avail_dir}/mod_security2-rules.conf; \
         echo "    SecAuditLogFormat \"Native\"" >> ${conf_avail_dir}/mod_security2-rules.conf; \

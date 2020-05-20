@@ -84,10 +84,12 @@ PATH    '/bin:/usr/bin' in `environ` notation. Shell would receive these single 
 as if you'd define that variable directly in shell script.
 
 The modsecurity module is configured as follows:
+root@www-test-env:/etc/apache2/conf-available# cat mod_security2-rules.conf 
 <IfModule security2_module>
                SecAuditEngine "RelevantOnly"
                SecAuditLog "/apache2-logs-fixed/modsec_audit.log"
-               SecAuditLogParts "ABCFKZ"
+               # We use 'I' here so multipart/form-data requests bodies are truncated
+               SecAuditLogParts "ABFIZ"
                SecAuditLogType "Serial"
                SecAuditLogRelevantStatus "^.*$"
                SecAuditLogFormat "Native"
