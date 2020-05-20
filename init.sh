@@ -98,7 +98,7 @@ while test $# -gt 0; do
 done
 
 if test -n "$_want_prune"; then
-	docker rmi -f "${IMAGE_NAME}:latest"
+	docker rmi -f "${IMAGE_NAME}:latest" >/dev/null 2>&1
 fi
 
 if test -z "$(docker images -q "${IMAGE_NAME}:latest")"; then
@@ -108,11 +108,11 @@ if test -z "$(docker images -q "${IMAGE_NAME}:latest")"; then
 	             --build-arg="DOCKER_DOCROOT=${DOCKER_DOCROOT}" \
 	             --build-arg="BUILD_DIR=${BUILD_DIR}" \
 	             --build-arg="APACHE_LOG_DIR=${APACHE_LOG_DIR}" \
-	             -t "${IMAGE_NAME}:latest" .
+	             -t "${IMAGE_NAME}:latest" . >/dev/null 2>&1
 fi
 
 if test -z "$(docker images -q "${MYSQL_IMAGE_NAME}:latest")"; then
-	docker image pull "${MYSQL_IMAGE_NAME}:latest"
+	docker image pull "${MYSQL_IMAGE_NAME}:latest" >/dev/null 2>&1
 fi
 
 declare -a -r MARIADB_DOCKER_ARGV=(
