@@ -89,7 +89,7 @@ root@www-test-env:/etc/apache2/conf-available# cat mod_security2-rules.conf
                SecAuditEngine "RelevantOnly"
                SecAuditLog "/apache2-logs-fixed/modsec_audit.log"
                # We use 'I' here so multipart/form-data requests bodies are truncated
-               SecAuditLogParts "ABFIZ"
+               SecAuditLogParts "ABFHIZ"
                SecAuditLogType "Serial"
                SecAuditLogRelevantStatus "^.*$"
                SecAuditLogFormat "Native"
