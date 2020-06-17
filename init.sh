@@ -138,6 +138,7 @@ if test -z "$(docker images -q "${IMAGE_NAME}:latest")"; then
 		"--build-arg=\"DOCKER_DOCROOT=${DOCKER_DOCROOT}\""
 		"--build-arg=\"BUILD_DIR=${BUILD_DIR}\""
 		"--build-arg=\"APACHE_LOG_DIR=${APACHE_LOG_DIR}\""
+		"--build-arg=\"RULE_TRACKER_PATCH=${RULE_TRACKER_PATCH}\""
 		"-t"
 		"\"${IMAGE_NAME}:latest\""
 		"."

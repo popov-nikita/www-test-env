@@ -12,6 +12,7 @@ IMAGE_NAME		'www-test-env'
 HOST_NAME		"${IMAGE_NAME}.local"
 MODSECURITY_TARGZ	'modsecurity-2.9.3.tar.gz'
 APACHE_NOTIFIER_TARGZ	"${APACHE_NOTIFIER_DIR}.tar.gz"
+RULE_TRACKER_PATCH	'rule-tracker.patch'
 BUILD_DIR		'/build'
 
 MYSQL_IMAGE_NAME	'mariadb'

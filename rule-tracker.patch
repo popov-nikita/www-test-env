@@ -1,0 +1,111 @@
+--- a/apache2/mod_security2.c
++++ b/apache2/mod_security2.c
+@@ -653,6 +653,28 @@ static const char *modsec_var_log_handle
+     return construct_single_var(msr, name);
+ }
+ 
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <fcntl.h>
++#include <unistd.h>
++
++/**
++ * Delete previous statistics on config reload
++ */
++static void __rule_tracker_reset(void)
++{
++	static const char default_filename[] = "/tmp/rule-statistics.txt";
++	const char *realname;
++
++	realname = getenv("__RULE_TRACKER_FILENAME");
++	if (!realname) {
++		realname = default_filename;
++	}
++
++	/* Would fail with ENOENT if file doesn't exist. It's ok */
++	unlink(realname);
++}
++
+ /**
+  * Pre-configuration initialisation hook.
+  */
+@@ -672,6 +694,8 @@ static int hook_pre_config(apr_pool_t *m
+         log_pfn_register(mp, "M", modsec_var_log_handler, 0);
+     }
+ 
++    __rule_tracker_reset();
++
+     return OK;
+ }
+ 
+--- a/apache2/apache2_config.c
++++ b/apache2/apache2_config.c
+@@ -759,6 +759,59 @@ void init_directory_config(directory_con
+ 
+ }
+ 
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <fcntl.h>
++#include <unistd.h>
++
++#include <stdio.h>
++#include <stdlib.h>
++
++/**
++ * Print usage statistics to dedicated file whose filename is taken from environment.
++ * Note that we do not know how many SecRules are processed.
++ * So in order to prevent file descriptors leakage we open/close the file
++ * each time this routine is called. This should not pose too much perfomance penalty
++ * since this routine is called during configuration stage.
++ * And never during normal server operation.
++ */
++static void __rule_tracker(msre_rule *rule)
++{
++	static const char default_filename[] = "/tmp/rule-statistics.txt";
++	const char *realname;
++	msre_actionset *acset;
++	int fd;
++
++	/* Bogus rule */
++	if (!rule || !rule->actionset) {
++		return;
++	}
++	/* Secondary rule in some chain. Doesn't contain any data we are interested in */
++	if (rule->chain_starter) {
++		return;
++	}
++
++	acset = rule->actionset;
++	/* Shouldn't produce any logs on successful match */
++	if (acset->auditlog != 1) {
++		return;
++	}
++
++	realname = getenv("__RULE_TRACKER_FILENAME");
++	if (!realname) {
++		realname = default_filename;
++	}
++
++	fd = open(realname, O_WRONLY|O_CREAT|O_APPEND, 0644);
++	if (fd < 0) {
++		return;
++	}
++
++	dprintf(fd, "%s\n", acset->id);
++
++	close(fd);
++}
++
+ /**
+  *
+  */
+@@ -993,6 +1046,8 @@ static const char *add_rule(cmd_parms *c
+     /* Update the unparsed rule */
+     rule->unparsed = msre_rule_generate_unparsed(dcfg->ruleset->mp, rule, NULL, NULL, NULL);
+ 
++    __rule_tracker(rule);
++
+     return NULL;
+ }
+ 

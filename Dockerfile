@@ -8,6 +8,7 @@ ARG DOCKER_RULES_DIR
 ARG DOCKER_DOCROOT
 ARG BUILD_DIR
 ARG APACHE_LOG_DIR
+ARG RULE_TRACKER_PATCH
 
 # getservbyname & friends libc functions depend on `netbase` package. Caused some php tests fail
 RUN { \
@@ -15,6 +16,7 @@ RUN { \
         apt-get update; \
         apt-get install --yes --no-install-recommends \
                                                       netbase \
+                                                      patch \
                                                       libapr1-dev \
                                                       libaprutil1-dev \
                                                       apache2-dev \
@@ -39,12 +41,14 @@ RUN { \
 RUN mkdir ${BUILD_DIR}
 COPY ${MODSECURITY_TARGZ} ${BUILD_DIR}
 COPY ${APACHE_NOTIFIER_TARGZ} ${BUILD_DIR}
+COPY ${RULE_TRACKER_PATCH} ${BUILD_DIR}
 
 RUN { \
         set -u -e -x; \
         cd ${BUILD_DIR}; \
         tar -x -f ${MODSECURITY_TARGZ}; \
         cd ${MODSECURITY_TARGZ%.tar.gz}; \
+        patch -p1 < ../${RULE_TRACKER_PATCH}; \
         ./configure --prefix=/usr/modsecurity \
                     --enable-apache2-module \
                     --enable-extentions; \
